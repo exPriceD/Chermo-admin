@@ -9,7 +9,7 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
-	"chermo_admin/internal/database"
+	"github.com/exPriceD/Chermo-admin/internal/database"
 )
 
 type Server struct {

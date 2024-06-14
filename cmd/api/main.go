@@ -1,8 +1,8 @@
 package main
 
 import (
-	"chermo_admin/internal/server"
 	"fmt"
+	"github.com/exPriceD/Chermo-admin/internal/server"
 )
 
 func main() {

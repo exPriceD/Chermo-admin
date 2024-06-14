@@ -1,18 +1,25 @@
 package server
 
 import (
-	"chermo_admin/internal/parser"
-	"net/http"
-
+	"github.com/exPriceD/Chermo-admin/internal/parser"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
 	r := gin.Default()
 
 	r.GET("/", s.HelloWorldHandler)
-	r.GET("/events", s.getEventsHandler)
 	r.GET("/health", s.healthHandler)
+	r.POST("/login", s.login)
+
+	protectedAPI := r.Group("/api")
+	protectedAPI.Use(AuthMiddleware())
+	{
+		protectedAPI.POST("/create_user", s.CreateUser)
+		protectedAPI.GET("/protected", s.ProtectedEndpoint)
+		protectedAPI.GET("/events", s.getEventsHandler)
+	}
 
 	return r
 }
@@ -35,4 +42,8 @@ func (s *Server) getEventsHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, items)
+}
+
+func (s *Server) ProtectedEndpoint(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "Welcome to the protected endpoint!"})
 }
