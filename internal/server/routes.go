@@ -1,47 +1,64 @@
 package server
 
 import (
+	"fmt"
+	"github.com/exPriceD/Chermo-admin/internal/entities"
+	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/exPriceD/Chermo-admin/internal/parser"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
 	r := gin.Default()
 
-	r.GET("/", s.HelloWorldHandler)
-	r.GET("/health", s.healthHandler)
-	r.POST("/login", s.login)
-
-	protectedAPI := r.Group("/api")
+	r.POST("/login", s.LoginHandler)
+	// r.GET("/api/get-events", s.getEventsFromChermoHandler)
+	r.GET("/api/events", s.getEventsHandler)
+	protectedAPI := r.Group("/api/v1")
 	protectedAPI.Use(AuthMiddleware())
 	{
-		protectedAPI.POST("/create_user", s.CreateUser)
+		protectedAPI.POST("/create_user", s.CreateUserHandler)
 		protectedAPI.GET("/protected", s.ProtectedEndpoint)
-		protectedAPI.GET("/events", s.getEventsHandler)
 	}
 
 	return r
 }
 
-func (s *Server) HelloWorldHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
-}
-
-func (s *Server) healthHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, s.db.Health())
-}
-
 func (s *Server) getEventsHandler(c *gin.Context) {
-	items, err := parser.FetchEvents()
+	events, err := s.eventsRepo.GetEvents()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, items)
+
+	c.JSON(http.StatusOK, events)
+}
+
+func (s *Server) getEventsFromChermoHandler(c *gin.Context) {
+	events, err := parser.FetchEvents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	for _, event := range events {
+		var eventStruct models.Event
+
+		eventStruct.Title = event.Title
+		eventStruct.Description = event.Description
+		eventStruct.ImageURL = event.Enclosure.URL
+
+		fmt.Println(entities.Event(eventStruct))
+
+		err := s.eventsRepo.InsertEvent(entities.Event(eventStruct))
+		if err != nil {
+			log.Printf("cannot insert event: %v", err)
+			continue
+		}
+	}
+	c.JSON(http.StatusOK, events)
 }
 
 func (s *Server) ProtectedEndpoint(c *gin.Context) {
