@@ -4,11 +4,14 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
-func (s *Server) login(c *gin.Context) {
+func (s *Server) LoginHandler(c *gin.Context) {
 	var creds models.Credentials
 	if err := c.BindJSON(&creds); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -21,7 +24,9 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	expirationTime := time.Now().Add(5 * time.Minute)
+	expTime, _ := strconv.Atoi(os.Getenv("TOKEN_EXPIRATION_TIME"))
+	expirationTime := time.Now().Add(time.Duration(expTime) * time.Minute)
+
 	claims := &models.Claims{
 		Username: creds.Username,
 		StandardClaims: jwt.StandardClaims{
@@ -39,20 +44,48 @@ func (s *Server) login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
-func (s *Server) CreateUser(c *gin.Context) {
+func (s *Server) CreateUserHandler(c *gin.Context) {
 	role, exists := c.Get("role")
 	if !exists || role != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
 
-	var newUser models.User
+	var newUser struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		Role       string `json:"role"`
+		MuseumName string `json:"museum_name"`
+	}
+
 	if err := c.BindJSON(&newUser); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	// Создание пользователя
+	// Хеширование пароля
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
+		return
+	}
+
+	museum, err := s.museumRepo.GetMuseumByName(newUser.MuseumName)
+	if err != nil {
+		return
+	}
+
+	user := models.User{
+		Username: newUser.Username,
+		Password: string(hashedPassword),
+		Role:     newUser.Role,
+		MuseumID: museum.ID,
+	}
+
+	if err := s.authRepo.InsertUser(&user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create user"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
 }

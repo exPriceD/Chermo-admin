@@ -2,7 +2,10 @@ package server
 
 import (
 	"fmt"
+	"github.com/exPriceD/Chermo-admin/internal/repositories/auth"
 	"github.com/exPriceD/Chermo-admin/internal/repositories/events"
+	"github.com/exPriceD/Chermo-admin/internal/repositories/museum"
+	"github.com/exPriceD/Chermo-admin/internal/repositories/visitors"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,8 +17,11 @@ import (
 )
 
 type Server struct {
-	port       int
-	eventsRepo *events.Repository
+	port         int
+	eventsRepo   *events.Repository
+	authRepo     *auth.Repository
+	museumRepo   *museum.Repository
+	visitorsRepo *visitors.Repository
 }
 
 func NewServer() *http.Server {
@@ -39,6 +45,14 @@ func NewServer() *http.Server {
 	}
 
 	eventsRepo := events.NewEventsRepository(db)
+	authRepo := auth.NewAuthRepository(db)
+	museumRepo := museum.NewMuseumRepository(db)
+	visitorsRepo := visitors.NewVisitorsRepository(db)
+
 	Srv.eventsRepo = eventsRepo
+	Srv.authRepo = authRepo
+	Srv.museumRepo = museumRepo
+	Srv.visitorsRepo = visitorsRepo
+
 	return server
 }
