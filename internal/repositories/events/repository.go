@@ -25,6 +25,16 @@ func (r *Repository) GetEvents() ([]entities.Event, error) {
 	return events, nil
 }
 
+func (r *Repository) GetEventByID(eventID int) (entities.Event, error) {
+	var event entities.Event
+	err := r.db.Get(&event, "SELECT id, title, description, image_url, museum_id FROM events WHERE id = $1", eventID)
+	if err != nil {
+		return event, err
+	}
+
+	return event, nil
+}
+
 func (r *Repository) GetEventsByMuseum(museumID int) ([]entities.Event, error) {
 	var events []entities.Event
 	err := r.db.Select(&events, "SELECT id, title, description, image_url, museum_id FROM events WHERE museum_id = $1", museumID)

@@ -29,3 +29,16 @@ type Event struct {
 	MuseumID    int    `json:"museum_id"`
 	ImageURL    string `json:"image_url"`
 }
+
+type TimeSlot struct {
+	StartTime string `json:"start_time"`
+	Slots     int    `json:"slots"`
+}
+
+type ScheduleRequest struct {
+	EventID   int                   `json:"event_id"`
+	StartDate string                `json:"start_date"`
+	EndDate   string                `json:"end_date"`
+	Duration  int                   `json:"duration"`
+	TimeSlots map[string][]TimeSlot `json:"time_slots"`
+}
