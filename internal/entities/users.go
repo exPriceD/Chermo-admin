@@ -12,4 +12,5 @@ type ReceivedUser struct {
 	ID       int    `db:"id"`
 	Password string `db:"password"`
 	Role     string `db:"role"`
+	MuseumID int    `db:"museum_id"`
 }

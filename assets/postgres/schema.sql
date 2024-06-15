@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS museums
 (
     id   SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
+    name VARCHAR(255) UNIQUE NOT NULL
 );
 
 -- Таблица пользователей
