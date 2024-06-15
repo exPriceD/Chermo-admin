@@ -1,6 +1,7 @@
 package museum
 
 import (
+	"fmt"
 	"github.com/exPriceD/Chermo-admin/internal/entities"
 	"github.com/jmoiron/sqlx"
 )
@@ -17,7 +18,8 @@ func NewMuseumRepository(db *sqlx.DB) *Repository {
 
 func (r *Repository) GetMuseumByName(name string) (entities.Museum, error) {
 	var museum entities.Museum
-	err := r.db.Select(&museum, "SELECT id, name FROM museums WHERE name = $1", name)
+	fmt.Println(name)
+	err := r.db.Get(&museum, "SELECT id, name FROM museums WHERE name = $1", name)
 	if err != nil {
 		return museum, err
 	}

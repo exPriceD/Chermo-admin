@@ -7,3 +7,9 @@ type User struct {
 	Role       string `json:"role"`
 	MuseumName string `json:"museum_name"`
 }
+
+type ReceivedUser struct {
+	ID       int    `db:"id"`
+	Password string `db:"password"`
+	Role     string `db:"role"`
+}

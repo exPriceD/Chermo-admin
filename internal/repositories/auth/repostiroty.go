@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/exPriceD/Chermo-admin/internal/entities"
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/jmoiron/sqlx"
 )
@@ -15,14 +16,15 @@ func NewAuthRepository(db *sqlx.DB) *Repository {
 	}
 }
 
-func (r *Repository) GetUser(username, password string) (int, error) {
-	var id int
-	err := r.db.Get(&id, "SELECT id FROM users WHERE username = $1 AND password = $2", username, password)
+func (r *Repository) GetUser(username string) (entities.ReceivedUser, error) {
+	var receivedUser entities.ReceivedUser
+
+	err := r.db.Get(&receivedUser, "SELECT id, role, password FROM users WHERE username = $1", username)
 	if err != nil {
-		return 0, err
+		return receivedUser, err
 	}
 
-	return id, nil
+	return receivedUser, nil
 }
 
 func (r *Repository) InsertUser(u *models.User) error {
@@ -31,6 +33,6 @@ func (r *Repository) InsertUser(u *models.User) error {
 		VALUES ($1, $2, $3, $4)
 	`
 
-	_, err := r.db.Exec(query, u.Username, u.Password, u.MuseumID)
+	_, err := r.db.Exec(query, u.Username, u.Password, u.Role, u.MuseumID)
 	return err
 }

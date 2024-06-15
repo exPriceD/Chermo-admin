@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/gin-gonic/gin"
@@ -18,8 +19,9 @@ func (s *Server) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Здесь должна быть проверка логина и пароля, например, с базой данных
-	if creds.Username != "user" || creds.Password != "password" {
+	receivedUser, err := s.authRepo.GetUser(creds.Username)
+	err = bcrypt.CompareHashAndPassword([]byte(receivedUser.Password), []byte(creds.Password))
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
@@ -29,6 +31,7 @@ func (s *Server) LoginHandler(c *gin.Context) {
 
 	claims := &models.Claims{
 		Username: creds.Username,
+		Role:     receivedUser.Role,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -63,7 +66,6 @@ func (s *Server) CreateUserHandler(c *gin.Context) {
 		return
 	}
 
-	// Хеширование пароля
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
@@ -72,6 +74,7 @@ func (s *Server) CreateUserHandler(c *gin.Context) {
 
 	museum, err := s.museumRepo.GetMuseumByName(newUser.MuseumName)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprint("GetMuseumByName error ", err)})
 		return
 	}
 
@@ -83,7 +86,7 @@ func (s *Server) CreateUserHandler(c *gin.Context) {
 	}
 
 	if err := s.authRepo.InsertUser(&user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprint("Could not create user ", err)})
 		return
 	}
 

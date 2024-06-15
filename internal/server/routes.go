@@ -49,6 +49,7 @@ func (s *Server) getEventsFromChermoHandler(c *gin.Context) {
 		eventStruct.Title = event.Title
 		eventStruct.Description = event.Description
 		eventStruct.ImageURL = event.Enclosure.URL
+		eventStruct.MuseumID = 1
 
 		fmt.Println(entities.Event(eventStruct))
 
