@@ -13,6 +13,7 @@ type User struct {
 type Claims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	MuseumID int    `json:"museum_id"`
 	jwt.StandardClaims
 }
 

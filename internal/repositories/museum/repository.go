@@ -16,6 +16,16 @@ func NewMuseumRepository(db *sqlx.DB) *Repository {
 	}
 }
 
+func (r *Repository) GetMuseums() ([]entities.Museum, error) {
+	var museums []entities.Museum
+	err := r.db.Select(&museums, "SELECT id, name FROM museums")
+	if err != nil {
+		return nil, err
+	}
+
+	return museums, nil
+}
+
 func (r *Repository) GetMuseumByName(name string) (entities.Museum, error) {
 	var museum entities.Museum
 	fmt.Println(name)

@@ -32,6 +32,7 @@ func (s *Server) LoginHandler(c *gin.Context) {
 	claims := &models.Claims{
 		Username: creds.Username,
 		Role:     receivedUser.Role,
+		MuseumID: receivedUser.MuseumID,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

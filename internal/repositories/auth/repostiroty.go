@@ -19,7 +19,7 @@ func NewAuthRepository(db *sqlx.DB) *Repository {
 func (r *Repository) GetUser(username string) (entities.ReceivedUser, error) {
 	var receivedUser entities.ReceivedUser
 
-	err := r.db.Get(&receivedUser, "SELECT id, role, password FROM users WHERE username = $1", username)
+	err := r.db.Get(&receivedUser, "SELECT id, role, password, museum_id FROM users WHERE username = $1", username)
 	if err != nil {
 		return receivedUser, err
 	}

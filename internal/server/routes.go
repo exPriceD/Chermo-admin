@@ -14,11 +14,13 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r := gin.Default()
 
 	r.POST("/login", s.LoginHandler)
-	// r.GET("/api/get-events", s.getEventsFromChermoHandler)
-	r.GET("/api/events", s.getEventsHandler)
+	r.GET("/events", s.getEventsHandler)
+	r.GET("/museums", s.getMuseumsHandler)
+
 	protectedAPI := r.Group("/api/v1")
 	protectedAPI.Use(AuthMiddleware())
 	{
+		protectedAPI.GET("/events", s.getEventsForAdminPanelHandler)
 		protectedAPI.POST("/create_user", s.CreateUserHandler)
 		protectedAPI.GET("/protected", s.ProtectedEndpoint)
 	}
@@ -26,8 +28,41 @@ func (s *Server) RegisterRoutes() http.Handler {
 	return r
 }
 
+func (s *Server) getMuseumsHandler(c *gin.Context) {
+	museums, err := s.museumRepo.GetMuseums()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, museums)
+}
+
 func (s *Server) getEventsHandler(c *gin.Context) {
 	events, err := s.eventsRepo.GetEvents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, events)
+}
+
+func (s *Server) getEventsForAdminPanelHandler(c *gin.Context) {
+	museumID, exists := c.Get("museum_id")
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+	museumIDInt, ok := museumID.(int)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid museum ID type"})
+		return
+	}
+
+	fmt.Println(museumIDInt)
+
+	events, err := s.eventsRepo.GetEventsByMuseum(museumIDInt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

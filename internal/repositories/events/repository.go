@@ -17,7 +17,17 @@ func NewEventsRepository(db *sqlx.DB) *Repository {
 
 func (r *Repository) GetEvents() ([]entities.Event, error) {
 	var events []entities.Event
-	err := r.db.Select(&events, "SELECT id, title, description, image_url FROM events")
+	err := r.db.Select(&events, "SELECT id, title, description, image_url, museum_id FROM events")
+	if err != nil {
+		return nil, err
+	}
+
+	return events, nil
+}
+
+func (r *Repository) GetEventsByMuseum(museumID int) ([]entities.Event, error) {
+	var events []entities.Event
+	err := r.db.Select(&events, "SELECT id, title, description, image_url, museum_id FROM events WHERE museum_id = $1", museumID)
 	if err != nil {
 		return nil, err
 	}
@@ -27,10 +37,10 @@ func (r *Repository) GetEvents() ([]entities.Event, error) {
 
 func (r *Repository) InsertEvent(event entities.Event) error {
 	query := `
-        INSERT INTO events (title, description, image_url)
-        VALUES ($1, $2, $3)
+        INSERT INTO events (title, description, image_url, museum_id)
+        VALUES ($1, $2, $3, $4)
     `
 
-	_, err := r.db.Exec(query, event.Title, event.Description, event.ImageURL)
+	_, err := r.db.Exec(query, event.Title, event.Description, event.ImageURL, event.MuseumID)
 	return err
 }
