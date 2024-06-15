@@ -20,6 +20,65 @@ func NewScheduleRepository(db *sqlx.DB) *Repository {
 	}
 }
 
+func (r *Repository) GetEventDates(eventID int) ([]string, error) {
+	query := "SELECT event_date FROM event_schedule WHERE event_id = $1"
+	rows, err := r.db.Query(query, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	var dates []string
+	for rows.Next() {
+		var eventDate time.Time
+		if err := rows.Scan(&eventDate); err != nil {
+			return nil, err
+		}
+		formattedDate := eventDate.Format("02-01-2006")
+		dates = append(dates, formattedDate)
+	}
+	return dates, nil
+}
+
+func (r *Repository) GetTimeSlots(eventID int, eventDate string) ([]map[string]interface{}, error) {
+	parsedDate, err := time.Parse("02-01-2006", eventDate)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `SELECT et.id, et.start_time, et.end_time, et.total_slots, et.available_slots
+                 FROM event_timeslots et
+                 JOIN event_schedule es ON et.schedule_id = es.id
+                 WHERE es.event_id = $1 AND es.event_date = $2`
+	rows, err := r.db.Query(query, eventID, parsedDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	var timeSlots []map[string]interface{}
+	for rows.Next() {
+		var id, totalSlots, availableSlots int
+		var startTime, endTime time.Time
+		if err := rows.Scan(&id, &startTime, &endTime, &totalSlots, &availableSlots); err != nil {
+			return nil, err
+		}
+		timeSlot := map[string]interface{}{
+			"id":              id,
+			"start_time":      startTime.Format("15:04"),
+			"end_time":        endTime.Format("15:04"),
+			"total_slots":     totalSlots,
+			"available_slots": availableSlots,
+		}
+		timeSlots = append(timeSlots, timeSlot)
+	}
+	return timeSlots, nil
+}
+
 func (r *Repository) GetScheduleByEventID(eventID int) ([]entities.Schedule, error) {
 	rows, err := r.db.Queryx(`
         SELECT es.event_date, et.id, et.start_time, et.end_time, et.total_slots, et.available_slots
@@ -129,6 +188,16 @@ func (r *Repository) CreateSchedule(startDate time.Time, endDate time.Time, req 
 	return nil
 }
 
+func (r *Repository) TimeSlotExists(timeslotID int) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM event_timeslots WHERE id = $1)"
+	err := r.db.QueryRow(query, timeslotID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (r *Repository) IsTimeSlotAvailable(timeslotID int) (bool, error) {
 	var availableSlots int
 	err := r.db.QueryRow("SELECT available_slots FROM event_timeslots WHERE id = $1", timeslotID).Scan(&availableSlots)
@@ -175,4 +244,23 @@ func (r *Repository) RegisterVisitor(timeslotID, visitorID int) error {
 	}
 
 	return tx.Commit()
+}
+
+func (r *Repository) UpdateRegistrationStatus(visitorID, timeslotID int, isConfirmed bool) error {
+	query := "UPDATE event_registrations SET is_confirmed = $1 WHERE visitor_id = $2 AND timeslot_id = $3"
+	result, err := r.db.Exec(query, isConfirmed, visitorID, timeslotID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no registration found with")
+	}
+
+	return nil
 }

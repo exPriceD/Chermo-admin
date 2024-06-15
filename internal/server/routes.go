@@ -25,6 +25,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.GET("/event/:id", s.getEventWithSchedule)
 	r.POST("/event/:id/register", s.RegisterVisitorHandler)
 
+	r.GET("/events/register/confirm/:id/:time_slot_id", s.confirmRegistration)
+	r.GET("/events/register/cancel/:id/:time_slot_id", s.cancelRegistration)
+
 	protectedAPI := r.Group("/api/v1")
 	protectedAPI.Use(AuthMiddleware())
 	{
@@ -34,10 +37,128 @@ func (s *Server) RegisterRoutes() http.Handler {
 		protectedAPI.GET("/event/:id/schedule", s.GetEventScheduleHandler)
 		protectedAPI.POST("/event/:id/schedule", s.CreateScheduleHandler)
 
+		protectedAPI.GET("/event/:id/visitors", s.getVisitorsHandler)
+		protectedAPI.GET("/event/:id/visitors/date", s.getVisitorsDatesHandler)
+		protectedAPI.GET("/event/:id/visitors/date/time", s.getVisitorsTimesHandler)
+
 		protectedAPI.POST("/create_user", s.CreateUserHandler)
 	}
 
 	return r
+}
+
+func (s *Server) getVisitorsHandler(c *gin.Context) {
+	eventID := c.Param("id")
+	eventIDInt, err := strconv.Atoi(eventID)
+
+	dates, err := s.scheduleRepo.GetEventDates(eventIDInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, dates)
+}
+
+func (s *Server) getVisitorsDatesHandler(c *gin.Context) {
+	eventID := c.Param("id")
+	eventDate := c.Query("date")
+	fmt.Println(eventDate)
+	eventIDInt, _ := strconv.Atoi(eventID)
+
+	timeSlots, err := s.scheduleRepo.GetTimeSlots(eventIDInt, eventDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, timeSlots)
+}
+
+func (s *Server) getVisitorsTimesHandler(c *gin.Context) {
+	eventID := c.Param("id")
+	eventIDInt, _ := strconv.Atoi(eventID)
+
+	eventDate := c.Query("date")
+	startTime := c.Query("time")
+	visitors, err := s.visitorsRepo.GetVisitors(eventIDInt, eventDate, startTime)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, visitors)
+}
+
+func (s *Server) confirmRegistration(c *gin.Context) {
+	visitorID := c.Param("id")
+	timeSlotID := c.Param("time_slot_id")
+
+	timeSlotIDInt, _ := strconv.Atoi(timeSlotID)
+
+	visitorIDInt, err := strconv.Atoi(visitorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid visitor ID"})
+		return
+	}
+
+	exists, err := s.visitorsRepo.VisitorExists(visitorIDInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not retrieve visitor"})
+		return
+	}
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Visitor not found"})
+		return
+	}
+
+	exists, err = s.scheduleRepo.TimeSlotExists(timeSlotIDInt)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Timeslot not found"})
+		return
+	}
+
+	err = s.scheduleRepo.UpdateRegistrationStatus(visitorIDInt, timeSlotIDInt, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not confirm registration"})
+		return
+	}
+
+	c.Redirect(http.StatusOK, "https://чермо.рф/")
+}
+
+func (s *Server) cancelRegistration(c *gin.Context) {
+	visitorID := c.Param("id")
+	timeSlotID := c.Param("time_slot_id")
+
+	timeSlotIDInt, _ := strconv.Atoi(timeSlotID)
+
+	visitorIDInt, err := strconv.Atoi(visitorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid visitor ID"})
+		return
+	}
+
+	exists, err := s.visitorsRepo.VisitorExists(visitorIDInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not retrieve visitor"})
+		return
+	}
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Visitor not found"})
+		return
+	}
+
+	exists, err = s.scheduleRepo.TimeSlotExists(timeSlotIDInt)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Timeslot not found"})
+		return
+	}
+
+	err = s.scheduleRepo.UpdateRegistrationStatus(visitorIDInt, timeSlotIDInt, false)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not cancel registration"})
+		return
+	}
+
+	c.Redirect(http.StatusOK, "https://чермо.рф/")
 }
 
 func (s *Server) getEventWithSchedule(c *gin.Context) {
