@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS visitors
     patronymic VARCHAR(255) NOT NULL,
     phone      VARCHAR(255) NOT NULL,
     email      VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_email UNIQUE (email)
 );
-
 
 -- Таблица для хранения расписания мероприятий
 CREATE TABLE IF NOT EXISTS event_schedule
@@ -67,8 +67,9 @@ CREATE TABLE IF NOT EXISTS event_registrations
     id                SERIAL PRIMARY KEY,
     timeslot_id       INTEGER REFERENCES event_timeslots (id),
     visitor_id        INTEGER REFERENCES visitors (id),
-    is_confirmed      BOOLEAN                  DEFAULT FALSE,
-    registration_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    status            VARCHAR(64)              DEFAULT 'pending' NOT NULL,
+    registration_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_timeslot_visitor UNIQUE (timeslot_id, visitor_id)
 );
 
 -- Индексы для таблицы музеев

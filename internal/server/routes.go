@@ -233,13 +233,13 @@ func (s *Server) RegisterVisitorHandler(c *gin.Context) {
 
 	visitorID, err := s.visitorsRepo.AddVisitor(visitor)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not add visitor"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not add visitor %v", err)})
 		return
 	}
 
 	err = s.scheduleRepo.RegisterVisitor(request.TimeslotID, visitorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not register visitor"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not register visitor%v", err)})
 		return
 	}
 

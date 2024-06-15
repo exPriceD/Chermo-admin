@@ -156,15 +156,19 @@ func (r *Repository) RegisterVisitor(timeslotID, visitorID int) error {
 		return fmt.Errorf("no available slots")
 	}
 
-	// Регистрация посетителя
-	_, err = tx.Exec("INSERT INTO event_registrations (timeslot_id, visitor_id) VALUES ($1, $2)", timeslotID, visitorID)
+	// Регистрация посетителя с обработкой конфликта
+	_, err = tx.Exec(`
+        INSERT INTO event_registrations (timeslot_id, visitor_id) 
+        VALUES ($1, $2)
+        ON CONFLICT (timeslot_id, visitor_id) DO NOTHING
+    `, timeslotID, visitorID)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 
-	// Обновление количества доступных слотов
-	_, err = tx.Exec("UPDATE event_timeslots SET available_slots = available_slots - 1 WHERE id = $1", timeslotID)
+	// Обновление количества доступных слотов, только если регистрация была успешной
+	_, err = tx.Exec("UPDATE event_timeslots SET available_slots = available_slots - 1 WHERE id = $1 AND available_slots > 0", timeslotID)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
