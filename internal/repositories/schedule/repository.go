@@ -3,6 +3,7 @@ package schedule
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/exPriceD/Chermo-admin/internal/entities"
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/jmoiron/sqlx"
@@ -21,7 +22,7 @@ func NewScheduleRepository(db *sqlx.DB) *Repository {
 
 func (r *Repository) GetScheduleByEventID(eventID int) ([]entities.Schedule, error) {
 	rows, err := r.db.Queryx(`
-        SELECT es.event_date, et.start_time, et.end_time, et.total_slots, et.available_slots
+        SELECT es.event_date, et.id, et.start_time, et.end_time, et.total_slots, et.available_slots
         FROM event_schedule es
         JOIN event_timeslots et ON es.id = et.schedule_id
         WHERE es.event_id = $1
@@ -38,11 +39,13 @@ func (r *Repository) GetScheduleByEventID(eventID int) ([]entities.Schedule, err
 		var eventDate time.Time
 		var startTime, endTime time.Time
 		var timeSlot entities.TimeSlot
-		err := rows.Scan(&eventDate, &startTime, &endTime, &timeSlot.TotalSlots, &timeSlot.AvailableSlots)
+		var timeSlotID int
+		err := rows.Scan(&eventDate, &timeSlotID, &startTime, &endTime, &timeSlot.TotalSlots, &timeSlot.AvailableSlots)
 		if err != nil {
 			return nil, err
 		}
 		dateStr := eventDate.Format("2006-01-02")
+		timeSlot.ID = timeSlotID
 		timeSlot.StartTime = startTime.Format("15:04")
 		timeSlot.EndTime = endTime.Format("15:04")
 		scheduleMap[dateStr] = append(scheduleMap[dateStr], timeSlot)
@@ -124,4 +127,48 @@ func (r *Repository) CreateSchedule(startDate time.Time, endDate time.Time, req 
 	err = tx.Commit()
 
 	return nil
+}
+
+func (r *Repository) IsTimeSlotAvailable(timeslotID int) (bool, error) {
+	var availableSlots int
+	err := r.db.QueryRow("SELECT available_slots FROM event_timeslots WHERE id = $1", timeslotID).Scan(&availableSlots)
+	if err != nil {
+		return false, err
+	}
+	return availableSlots > 0, nil
+}
+
+func (r *Repository) RegisterVisitor(timeslotID, visitorID int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	var availableSlots int
+	err = tx.QueryRow("SELECT available_slots FROM event_timeslots WHERE id = $1 FOR UPDATE", timeslotID).Scan(&availableSlots)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	if availableSlots <= 0 {
+		_ = tx.Rollback()
+		return fmt.Errorf("no available slots")
+	}
+
+	// Регистрация посетителя
+	_, err = tx.Exec("INSERT INTO event_registrations (timeslot_id, visitor_id) VALUES ($1, $2)", timeslotID, visitorID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	// Обновление количества доступных слотов
+	_, err = tx.Exec("UPDATE event_timeslots SET available_slots = available_slots - 1 WHERE id = $1", timeslotID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }

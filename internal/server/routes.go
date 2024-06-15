@@ -18,21 +18,50 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r := gin.Default()
 
 	r.POST("/login", s.LoginHandler)
-	r.GET("/events", s.getEventsHandler)
+
 	r.GET("/museums", s.getMuseumsHandler)
+
+	r.GET("/events", s.getEventsHandler)
+	r.GET("/event/:id", s.getEventWithSchedule)
+	r.POST("/event/:id/register", s.RegisterVisitorHandler)
 
 	protectedAPI := r.Group("/api/v1")
 	protectedAPI.Use(AuthMiddleware())
 	{
 		protectedAPI.GET("/events", s.getEventsForAdminPanelHandler)
 		protectedAPI.GET("/event/:id", s.getEventByIDHandler)
-		protectedAPI.POST("/create_user", s.CreateUserHandler)
 
 		protectedAPI.GET("/event/:id/schedule", s.GetEventScheduleHandler)
 		protectedAPI.POST("/event/:id/schedule", s.CreateScheduleHandler)
+
+		protectedAPI.POST("/create_user", s.CreateUserHandler)
 	}
 
 	return r
+}
+
+func (s *Server) getEventWithSchedule(c *gin.Context) {
+	eventID := c.Param("id")
+	eventIDInt, err := strconv.Atoi(eventID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
+		return
+	}
+
+	event, err := s.eventsRepo.GetEventByID(eventIDInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not retrieve event"})
+		return
+	}
+
+	schedules, err := s.scheduleRepo.GetScheduleByEventID(eventIDInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not retrieve schedule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"event": event, "slots": schedules})
+
 }
 
 func (s *Server) getMuseumsHandler(c *gin.Context) {
@@ -149,29 +178,70 @@ func (s *Server) GetEventScheduleHandler(c *gin.Context) {
 }
 
 func (s *Server) CreateScheduleHandler(c *gin.Context) {
-	var req models.ScheduleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request models.ScheduleRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	startDate, err := time.Parse("02.01.2006", req.StartDate)
+	startDate, err := time.Parse("02.01.2006", request.StartDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format"})
 		return
 	}
 
-	endDate, err := time.Parse("02.01.2006", req.EndDate)
+	endDate, err := time.Parse("02.01.2006", request.EndDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format"})
 		return
 	}
 
-	err = s.scheduleRepo.CreateSchedule(startDate, endDate, req)
+	err = s.scheduleRepo.CreateSchedule(startDate, endDate, request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not insert in db %v", err)})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Schedule created successfully"})
+}
+
+func (s *Server) RegisterVisitorHandler(c *gin.Context) {
+	var request entities.RegistrationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	isAvailable, err := s.scheduleRepo.IsTimeSlotAvailable(request.TimeslotID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not check time slot availability"})
+		return
+	}
+
+	if !isAvailable {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Time slot is not available"})
+		return
+	}
+
+	visitor := entities.Visitor{
+		FirstName:  request.FirstName,
+		LastName:   request.LastName,
+		Patronymic: request.Patronymic,
+		Phone:      request.Phone,
+		Email:      request.Email,
+	}
+
+	visitorID, err := s.visitorsRepo.AddVisitor(visitor)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not add visitor"})
+		return
+	}
+
+	err = s.scheduleRepo.RegisterVisitor(request.TimeslotID, visitorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not register visitor"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
 }
