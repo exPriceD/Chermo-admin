@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/exPriceD/Chermo-admin/internal/entities"
+	"github.com/exPriceD/Chermo-admin/internal/mail"
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/exPriceD/Chermo-admin/internal/parser"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -121,7 +123,7 @@ func (s *Server) confirmRegistration(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusOK, "https://чермо.рф/")
+	c.JSON(http.StatusOK, gin.H{"status": "Запись подтверждена"})
 }
 
 func (s *Server) cancelRegistration(c *gin.Context) {
@@ -158,7 +160,7 @@ func (s *Server) cancelRegistration(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusOK, "https://чермо.рф/")
+	c.JSON(http.StatusOK, gin.H{"status": "Запись отменена"})
 }
 
 func (s *Server) getEventWithSchedule(c *gin.Context) {
@@ -360,7 +362,32 @@ func (s *Server) RegisterVisitorHandler(c *gin.Context) {
 
 	err = s.scheduleRepo.RegisterVisitor(request.TimeslotID, visitorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not register visitor%v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not register visitor %v", err)})
+		return
+	}
+
+	// Получаем информацию о мероприятии
+	event, err := s.eventsRepo.GetEventByTimeslotID(request.TimeslotID)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not retrieve event information"})
+		return
+	}
+
+	// Формируем текст письма
+	mailText := fmt.Sprintf(
+		"Для подтверждения регистрации на мероприятие перейдите по ссылке: http://localhost:8080/events/register/confirm/%d/%d\n\n"+
+			"Информация о мероприятии:\n"+
+			"Название: %s\n"+
+			"Место: %s\n"+
+			"Дата: %s\n"+
+			"Время: %s - %s\n",
+		visitorID, request.TimeslotID, event.Title, event.Museum, event.Date.Format("02.01.2006"), event.StartTime.Format("15:04"), event.EndTime.Format("15:04"),
+	)
+
+	err = mail.SendEmail(os.Getenv("MAIL_USERNAME"), visitor.Email, "Подтверждение регистрации на мероприятие", mailText)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not send confirmation email"})
 		return
 	}
 

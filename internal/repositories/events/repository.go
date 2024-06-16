@@ -1,8 +1,11 @@
 package events
 
 import (
+	"database/sql"
+	"errors"
 	"github.com/exPriceD/Chermo-admin/internal/entities"
 	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 type Repository struct {
@@ -53,4 +56,34 @@ func (r *Repository) InsertEvent(event entities.Event) error {
 
 	_, err := r.db.Exec(query, event.Title, event.Description, event.ImageURL, event.MuseumID)
 	return err
+}
+
+type Event struct {
+	Title     string
+	Museum    string
+	Date      time.Time
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+func (r *Repository) GetEventByTimeslotID(timeslotID int) (*Event, error) {
+	query := `
+        SELECT e.title, m.name, es.event_date, et.start_time, et.end_time
+        FROM events e
+        JOIN event_schedule es ON e.id = es.event_id
+        JOIN event_timeslots et ON es.id = et.schedule_id
+        JOIN museums m ON e.museum_id = m.id
+        WHERE et.id = $1
+    `
+
+	var event Event
+	err := r.db.QueryRow(query, timeslotID).Scan(&event.Title, &event.Museum, &event.Date, &event.StartTime, &event.EndTime)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &event, nil
 }
