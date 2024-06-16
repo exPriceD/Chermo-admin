@@ -5,6 +5,7 @@ import (
 	"github.com/exPriceD/Chermo-admin/internal/repositories/auth"
 	"github.com/exPriceD/Chermo-admin/internal/repositories/events"
 	"github.com/exPriceD/Chermo-admin/internal/repositories/museum"
+	"github.com/exPriceD/Chermo-admin/internal/repositories/reports"
 	"github.com/exPriceD/Chermo-admin/internal/repositories/schedule"
 	"github.com/exPriceD/Chermo-admin/internal/repositories/visitors"
 	"net/http"
@@ -24,6 +25,7 @@ type Server struct {
 	museumRepo   *museum.Repository
 	visitorsRepo *visitors.Repository
 	scheduleRepo *schedule.Repository
+	reportsRepo  *reports.Repository
 }
 
 func NewServer() *http.Server {
@@ -51,11 +53,14 @@ func NewServer() *http.Server {
 	museumRepo := museum.NewMuseumRepository(db)
 	visitorsRepo := visitors.NewVisitorsRepository(db)
 	scheduleRepo := schedule.NewScheduleRepository(db)
+	reportsRepo := reports.NewReportsRepository(db)
 
 	Srv.eventsRepo = eventsRepo
 	Srv.authRepo = authRepo
 	Srv.museumRepo = museumRepo
 	Srv.visitorsRepo = visitorsRepo
 	Srv.scheduleRepo = scheduleRepo
+	Srv.reportsRepo = reportsRepo
+
 	return server
 }

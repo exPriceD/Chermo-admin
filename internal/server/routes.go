@@ -9,6 +9,7 @@ import (
 	"github.com/exPriceD/Chermo-admin/internal/models"
 	"github.com/exPriceD/Chermo-admin/internal/parser"
 	"github.com/gin-gonic/gin"
+	"github.com/xuri/excelize/v2"
 	"log"
 	"net/http"
 	"os"
@@ -42,6 +43,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 		protectedAPI.GET("/event/:id/visitors", s.getVisitorsHandler)
 		protectedAPI.GET("/event/:id/visitors/date", s.getVisitorsDatesHandler)
 		protectedAPI.GET("/event/:id/visitors/date/time", s.getVisitorsTimesHandler)
+
+		protectedAPI.GET("/download-report-visitors", s.downloadReportVisitors)
+		protectedAPI.GET("/download-report-events", s.downloadReportEvents)
 
 		protectedAPI.POST("/create_user", s.CreateUserHandler)
 	}
@@ -376,14 +380,15 @@ func (s *Server) RegisterVisitorHandler(c *gin.Context) {
 
 	// Формируем текст письма
 	mailText := fmt.Sprintf(
-		"Для подтверждения регистрации на мероприятие перейдите по ссылке: http://localhost:8080/events/register/confirm/%d/%d\n\n"+
-			"Информация о мероприятии:\n"+
-			"Название: %s\n"+
-			"Место: %s\n"+
-			"Дата: %s\n"+
-			"Время: %s - %s\n",
+		"Для подтверждения регистрации на мероприятие перейдите по ссылке: http://localhost:8080/events/register/confirm/%d/%d<br>"+
+			"Информация о мероприятии:<br>"+
+			"Название: %s<br>"+
+			"Место: %s<br>"+
+			"Дата: %s<br>"+
+			"Время: %s - %s<br>",
 		visitorID, request.TimeslotID, event.Title, event.Museum, event.Date.Format("02.01.2006"), event.StartTime.Format("15:04"), event.EndTime.Format("15:04"),
 	)
+	mailText += fmt.Sprintf("Для отмены перейдите по ссылке: http://localhost:8080/events/register/confirm/%d/%d", visitorID, request.TimeslotID)
 
 	err = mail.SendEmail(os.Getenv("MAIL_USERNAME"), visitor.Email, "Подтверждение регистрации на мероприятие", mailText)
 	if err != nil {
@@ -392,4 +397,95 @@ func (s *Server) RegisterVisitorHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
+}
+
+func (s *Server) downloadReportVisitors(c *gin.Context) {
+	eventID := c.Query("event_id")
+	if eventID == "" {
+		c.String(http.StatusBadRequest, "необходим параметр event_id")
+		return
+	}
+
+	rows, err := s.reportsRepo.GetVisitorReport(eventID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	f := excelize.NewFile()
+	sheetName := "Посетители"
+	_, _ = f.NewSheet(sheetName)
+	_ = f.SetCellValue(sheetName, "A1", "Дата бронирования")
+	_ = f.SetCellValue(sheetName, "B1", "Имя")
+	_ = f.SetCellValue(sheetName, "C1", "Телефон")
+
+	rowIndex := 2
+	for rows.Next() {
+		var registrationDate, firstName, phone string
+		if err := rows.Scan(&registrationDate, &firstName, &phone); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowIndex), registrationDate)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowIndex), firstName)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowIndex), phone)
+		rowIndex++
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", "attachment;filename=report1.xlsx")
+	if err := f.Write(c.Writer); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+	}
+}
+
+func (s *Server) downloadReportEvents(c *gin.Context) {
+	rows, err := s.reportsRepo.GetEventReport()
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	f := excelize.NewFile()
+	sheetName := "Мероприятия"
+	_, err = f.NewSheet(sheetName)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = f.SetCellValue(sheetName, "A1", "Музей")
+	_ = f.SetCellValue(sheetName, "B1", "Дата")
+	_ = f.SetCellValue(sheetName, "C1", "Начало")
+	_ = f.SetCellValue(sheetName, "D1", "Окончание")
+	_ = f.SetCellValue(sheetName, "E1", "Мероприятие")
+	_ = f.SetCellValue(sheetName, "F1", "Доступные места")
+
+	rowIndex := 2
+	for rows.Next() {
+		var museumName, eventDate, startTime, endTime, eventTitle string
+		var availableSlots int
+		if err := rows.Scan(&museumName, &eventDate, &startTime, &endTime, &eventTitle, &availableSlots); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowIndex), museumName)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowIndex), eventDate)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowIndex), startTime)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowIndex), endTime)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("E%d", rowIndex), eventTitle)
+		_ = f.SetCellValue(sheetName, fmt.Sprintf("F%d", rowIndex), availableSlots)
+		rowIndex++
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", "attachment;filename=report_events.xlsx")
+	if err := f.Write(c.Writer); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+	}
 }
